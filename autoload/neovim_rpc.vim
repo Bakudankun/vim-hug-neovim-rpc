@@ -108,30 +108,34 @@ def neovim_rpc#rpcnotify(channel: number, event: string, ...args: list<any>)
     neovim_rpc#pyxcall('neovim_rpc_server.rpcnotify', channel, event, args)
 enddef
 
+func s:evalexpr(args, opt)
+    call ch_evalexpr(g:_neovim_rpc_main_channel, a:args, a:opt)
+endfunc
+
 var rspid = 1
-func neovim_rpc#rpcrequest(channel, event, ...)
-    let s:rspid = s:rspid + 1
+def neovim_rpc#rpcrequest(channel: number, event: string, ...req: list<any>): any
+    ++rspid
 
-    " a unique key for storing response
-    let rspid = '' .. s:rspid
+    # a unique key for storing response
+    const rspid_str = '' .. rspid
 
-    " neovim's rpcrequest doesn't have timeout
-    let opt = {'timeout': 24 * 60 * 60 * 1000}
-    let args = ['rpcrequest', a:channel, a:event, a:000, rspid]
-    call ch_evalexpr(g:_neovim_rpc_main_channel, args, opt)
+    # neovim's rpcrequest doesn't have timeout
+    const opt = {timeout: 24 * 60 * 60 * 1000}
+    const args = ['rpcrequest', channel, event, req, rspid_str]
+    s:evalexpr(args, opt)
 
-    let expr = 'neovim_rpc_server.responses.pop("' .. rspid .. '")'
+    const expr = 'neovim_rpc_server.responses.pop("' .. rspid_str .. '")'
 
-    call s:Py('import neovim_rpc_server, json')
-    let [err, result] = s:Pyeval(expr)
-    if err
+    Py('import neovim_rpc_server, json')
+    const [err, result] = Pyeval(expr)
+    if !!err
         if type(err) == type('')
             throw err
         endif
         throw err[1]
     endif
     return result
-endfunc
+enddef
 
 def neovim_rpc#_on_stdout(job: job, data: any)
     const jobid = ch_info(job)['id']
