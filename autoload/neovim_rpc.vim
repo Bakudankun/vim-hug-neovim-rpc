@@ -1,23 +1,16 @@
-vim9script
 
 if has('pythonx')
-    g:neovim_rpc#py = 'pythonx'
-    def Pyeval(expr: string): any
-        return pyxeval(expr)
-    enddef
+    let g:neovim_rpc#py = 'pythonx'
+    let s:pyeval = function('pyxeval')
 elseif has('python3')
-    g:neovim_rpc#py = 'python3'
-    def Pyeval(expr: string): any
-        return py3eval(expr)
-    enddef
+    let g:neovim_rpc#py = 'python3'
+    let s:pyeval = function('py3eval')
 else
-    g:neovim_rpc#py = 'python'
-    def Pyeval(expr: string): any
-        return pyeval(expr)
-    enddef
+    let g:neovim_rpc#py = 'python'
+    let s:pyeval = function('pyeval')
 endif
 
-def Py(cmd: string)
+def s:py(cmd: string)
     execute g:neovim_rpc#py cmd
 enddef
 
@@ -31,10 +24,10 @@ def neovim_rpc#serveraddr(): string
     endif
 
     try
-        Py('import pynvim')
+        s:py('import pynvim')
     catch
         try
-            Py('import neovim')
+            s:py('import neovim')
         catch
             neovim_rpc#_error("failed executing: " ..
                 g:neovim_rpc#py .. " import [pynvim|neovim]")
@@ -44,8 +37,8 @@ def neovim_rpc#serveraddr(): string
         endtry
     endtry
 
-    Py('import neovim_rpc_server')
-    var servers = Pyeval('neovim_rpc_server.start()')
+    s:py('import neovim_rpc_server')
+    var servers = s:pyeval('neovim_rpc_server.start()')
 
     g:_neovim_rpc_nvim_server     = servers[0]
     g:_neovim_rpc_vim_server = servers[1]
@@ -58,20 +51,20 @@ def neovim_rpc#serveraddr(): string
     return g:_neovim_rpc_nvim_server
 enddef
 
-# elegant python function call wrapper
+" elegant python function call wrapper
 def neovim_rpc#pyxcall(func: string, ...args: list<any>): any
-    Py('import vim, json')
+    s:py('import vim, json')
     g:neovim_rpc#_tmp_args = copy(args)
-    var ret = Pyeval(func .. '(*vim.vars["neovim_rpc#_tmp_args"])')
+    var ret = s:pyeval(func .. '(*vim.vars["neovim_rpc#_tmp_args"])')
     unlet g:neovim_rpc#_tmp_args
     return ret
 enddef
 
-# supported opt keys:
-# - on_stdout
-# - on_stderr
-# - on_exit
-# - detach
+" supported opt keys:
+" - on_stdout
+" - on_stderr
+" - on_exit
+" - detach
 def neovim_rpc#jobstart(cmd: any, opts: dict<any> = {}): number
 
     opts['_close'] = 0
@@ -112,12 +105,12 @@ func s:evalexpr(args, opt)
     call ch_evalexpr(g:_neovim_rpc_main_channel, a:args, a:opt)
 endfunc
 
-var rspid = 1
+let s:rspid = 1
 def neovim_rpc#rpcrequest(channel: number, event: string, ...req: list<any>): any
-    ++rspid
+    ++s:rspid
 
     # a unique key for storing response
-    const rspid_str = '' .. rspid
+    const rspid_str = '' .. s:rspid
 
     # neovim's rpcrequest doesn't have timeout
     const opt = {timeout: 24 * 60 * 60 * 1000}
@@ -126,8 +119,8 @@ def neovim_rpc#rpcrequest(channel: number, event: string, ...req: list<any>): an
 
     const expr = 'neovim_rpc_server.responses.pop("' .. rspid_str .. '")'
 
-    Py('import neovim_rpc_server, json')
-    const [err, result] = Pyeval(expr)
+    s:py('import neovim_rpc_server, json')
+    const [err, result] = s:pyeval(expr)
     if !!err
         if type(err) == type('')
             throw err
@@ -179,8 +172,8 @@ def neovim_rpc#_callback()
     execute g:neovim_rpc#py .. ' neovim_rpc_server.process_pending_requests()'
 enddef
 
-g:_neovim_rpc_main_channel = -1
-g:_neovim_rpc_jobs = {}
+let g:_neovim_rpc_main_channel = -1
+let g:_neovim_rpc_jobs = {}
 
 def neovim_rpc#_error(msg: string)
     if mode() == 'i'
